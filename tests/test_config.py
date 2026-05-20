@@ -32,6 +32,38 @@ class TestConfig:
         assert data["key1"] == "value1"
         assert data["key2"] == "value2"
 
+    def test_get_int_from_json_number(self, tmp_path):
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{"limits": {"memory_mb": 512}}')
+        config = Config(str(config_file))
+        assert config.get_int("limits.memory_mb") == 512
+
+    def test_get_int_from_numeric_string(self):
+        config = Config()
+        config.set("limits.timeout_seconds", "30")
+        assert config.get_int("limits.timeout_seconds") == 30
+
+    def test_get_int_from_env_override(self, monkeypatch):
+        monkeypatch.setenv("AO_LIMITS_MAX_WORKERS", "4")
+        config = Config()
+        assert config.get_int("limits.max.workers") == 4
+
+    def test_get_int_missing_uses_default(self):
+        config = Config()
+        assert config.get_int("limits.timeout_seconds", 60) == 60
+
+    def test_get_int_rejects_invalid_value(self):
+        config = Config()
+        config.set("limits.timeout_seconds", "soon")
+        with pytest.raises(ValueError, match="limits.timeout_seconds"):
+            config.get_int("limits.timeout_seconds")
+
+    def test_get_int_rejects_bool(self):
+        config = Config()
+        config.set("limits.enabled", True)
+        with pytest.raises(ValueError, match="bool"):
+            config.get_int("limits.enabled")
+
 # 2019-02-01T18:58:35 update
 
 # 2019-07-31T13:45:15 update
