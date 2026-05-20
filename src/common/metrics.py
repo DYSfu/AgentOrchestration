@@ -32,9 +32,10 @@ class MetricsCollector:
 
     def stop_timer(self, metric: str) -> float:
         with self._lock:
-            if metric in self._timers:
-                duration = time.time() - self._timers.pop(metric)
-                self.observe(metric, duration)
+            start_time = self._timers.pop(metric, None)
+            if start_time is not None:
+                duration = time.time() - start_time
+                self._histograms[metric].append(duration)
                 return duration
         return 0.0
 

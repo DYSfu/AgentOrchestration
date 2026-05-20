@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 from src.common.metrics import MetricsCollector
 
@@ -30,6 +32,27 @@ class TestMetricsCollector:
         time.sleep(0.01)
         duration = self.metrics.stop_timer("operation")
         assert duration > 0.005
+
+    def test_stop_timer_records_duration_without_deadlock(self, monkeypatch):
+        timestamps = iter([10.0, 10.5])
+        monkeypatch.setattr("src.common.metrics.time.time", lambda: next(timestamps))
+
+        self.metrics.start_timer("operation")
+
+        result = {}
+
+        def stop_timer():
+            result["duration"] = self.metrics.stop_timer("operation")
+
+        thread = threading.Thread(target=stop_timer)
+        thread.start()
+        thread.join(timeout=0.5)
+
+        assert not thread.is_alive()
+        assert result["duration"] == 0.5
+        snapshot = self.metrics.snapshot()
+        assert snapshot["histograms"]["operation"]["count"] == 1
+        assert snapshot["histograms"]["operation"]["sum"] == 0.5
 
 # 2019-07-16T09:29:21 update
 
