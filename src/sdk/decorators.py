@@ -1,8 +1,30 @@
 """SDK decorators for agent definitions."""
 
-import functools
 import asyncio
-from typing import Any, Callable, Dict, Optional
+import functools
+import re
+from typing import Callable, Optional
+
+_SEMVER_PATTERN = re.compile(
+    r"^(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)\."
+    r"(0|[1-9]\d*)"
+    r"(?:-("
+    r"(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)"
+    r"(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*"
+    r"))?"
+    r"(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$"
+)
+
+
+def _validate_agent_version(version: str) -> str:
+    """Return a valid semantic agent version or raise ``ValueError``."""
+    if not isinstance(version, str) or not _SEMVER_PATTERN.fullmatch(version):
+        raise ValueError(
+            "agent version must use semantic version format "
+            "'MAJOR.MINOR.PATCH' with optional prerelease/build metadata"
+        )
+    return version
 
 
 def task(name: Optional[str] = None, retries: int = 0, timeout: int = 300):
@@ -23,7 +45,10 @@ def task(name: Optional[str] = None, retries: int = 0, timeout: int = 300):
                 )
                 return result
             except asyncio.TimeoutError:
-                raise TimeoutError(f"Task {name or func.__name__} timed out after {timeout}s")
+                task_name = name or func.__name__
+                raise TimeoutError(
+                    f"Task {task_name} timed out after {timeout}s"
+                )
 
         return wrapper
     return decorator
@@ -31,10 +56,12 @@ def task(name: Optional[str] = None, retries: int = 0, timeout: int = 300):
 
 def agent(name: str, version: str = "1.0.0", description: str = ""):
     """Decorator for marking a class as an agent definition."""
+    validated_version = _validate_agent_version(version)
+
     def decorator(cls: type) -> type:
         cls.__agent_config__ = {
             "name": name,
-            "version": version,
+            "version": validated_version,
             "description": description,
         }
         return cls
